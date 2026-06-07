@@ -4,7 +4,7 @@ from datetime import date
 import locale
 
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Optimiseur de Cartes KSA-TN", layout="wide")
+st.set_page_config(page_title="Optimiseur de Cartes KSA-TN-US-FR", layout="wide")
 st.title("💳 Outil de Décision Financière : STC Bank vs Al Rajhi")
 st.subheader("Analyse ciblée, détails des calculs et calcul des seuils optimaux")
 
@@ -44,7 +44,8 @@ date_operation = st.date_input("Sélectionnez la date de votre transaction :", d
 col1, col2 = st.columns(2)
 
 with col1:
-    pays = st.radio("📍 2. Choisissez le pays de l'opération :", ["Arabie Saoudite (KSA)", "Tunisie", "France"], horizontal=True)
+    # Ajout des USA dans le sélecteur de pays
+    pays = st.radio("📍 2. Choisissez le pays de l'opération :", ["Arabie Saoudite (KSA)", "Tunisie", "États-Unis (USA)", "France"], horizontal=True)
     
     jours_semaine = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
     nom_jour = jours_semaine[date_operation.weekday()]
@@ -59,6 +60,9 @@ with col2:
     elif "Tunisie" in pays:
         devise_cible = "TND"
         st.info("💱 Devise détectée automatiquement : **TND**")
+    elif "USA" in pays:
+        devise_cible = "USD"
+        st.info("💱 Devise détectée automatiquement : **USD**")
     else:
         devise_cible = st.radio("💱 4. Choisissez la devise de paiement en France :", ["EUR", "USD"], horizontal=True)
 
@@ -138,15 +142,19 @@ else:
             ff_stc_sig = frais_retrait_fixe_stc_int
             ff_stc_cla = frais_retrait_fixe_stc_int
 
+    # Alignement de la tarification Al Rajhi Travel Plus pour l'USD (USA ou option France)
     if devise_cible == "USD":
-        brut_rajhi = montant_devise * 3.75
+        brut_rajhi = montant_devise * 3.75  # Taux fixe de la carte Al Rajhi sur le dollar
+        fc_rajhi = 0.00  # Zéro frais de change sur l'USD natif
         if "Retrait" in type_op:
             pct_retrait_rajhi = 0.03 
     elif devise_cible == "EUR":
         brut_rajhi = valeur_brute_sar
+        fc_rajhi = 0.00  # Zéro frais de change sur l'EUR natif
         if "Retrait" in type_op:
             pct_retrait_rajhi = 0.03
     else:
+        # Pour les autres devises (ex: TND)
         fc_rajhi = 0.02
         if "Retrait" in type_op:
             pct_retrait_rajhi = 0.03
@@ -180,14 +188,16 @@ if "Retrait" in type_op and "KSA" not in pays:
         f"est de **{seuil_frais_retrait_devise:.2f} {devise_cible}** ({seuil_frais_retrait_sar:.2f} SAR brut)."
     )
     
-    # --- ASTUCE 2 : SEUIL D'ARBITRAGE GLOBAL (SPÉCIFIQUE FRANCE / HORS SÉISON) ---
-    if "France" in pays and not est_ete and devise_cible == "EUR":
-        seuil_global_sar = 27.50 / 0.01  # Résolution de : 0.03*M = 0.02*M + 27.50
+    # --- ASTUCE 2 : SEUIL D'ARBITRAGE GLOBAL (SPÉCIFIQUE ZONE EURO & ZONE DOLLAR / HORS SÉISON) ---
+    if not est_ete and (devise_cible in ["EUR", "USD"]):
+        seuil_global_sar = 27.50 / 0.01  # Résolution algébrique : 0.03*M = 0.02*M + 27.50
         seuil_global_devise = seuil_global_sar / taux_brut
         
+        nom_zone = "Zone Dollar" if devise_cible == "USD" else "Zone Euro"
+        
         st.info(
-            f"🇪🇺 **Astuce 2 : Seuil d'Arbitrage Global (Zone Euro - Hors Saison) :** "
-            f"Grâce aux 2% d'économie sur les frais de change par rapport à STC Bank, vous pouvez retirer avec **Al Rajhi Travel Plus** "
-            f"jusqu'à **{seuil_global_devise:.2f} EUR** ({seuil_global_sar:.2f} SAR brut) sans que son coût global ne dépasse vos cartes STC. "
+            f"🦅 **Astuce 2 : Seuil d'Arbitrage Global ({nom_zone} - Hors Saison) :** "
+            f"Grâce aux 2% d'économie sur les frais de change par rapport à STC Bank (0% chez Al Rajhi sur cette devise), vous pouvez retirer avec **Al Rajhi Travel Plus** "
+            f"jusqu'à **{seuil_global_devise:.2f} {devise_cible}** ({seuil_global_sar:.2f} SAR brut) sans que son coût global ne dépasse vos cartes STC. "
             f"Au-delà de ce montant, l'impact des 3% devient trop lourd et STC Bank reprend l'avantage."
         )
